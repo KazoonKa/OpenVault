@@ -1,0 +1,318 @@
+import React, { useState, useEffect } from 'react';
+// human note: importing supabase from cdn to avoid dependency resolution errors in the preview
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+import { 
+  Folder, Plus, Lock, ArrowLeft, Upload, FileText, 
+  Loader2, Eye, Shield, Hash, HardDrive, Download, X
+} from 'lucide-react';
+
+/** * human note: 
+ * connect your supabase project here.
+ * you need a 'folders' table and a 'vaults' storage bucket.
+ */
+const SUPABASE_URL = ''; 
+const SUPABASE_ANON_KEY = '';
+const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY) 
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) 
+  : null;
+
+// neubrutalist design constants
+const BORDER = "border-[4px] border-black";
+const SHADOW = "shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]";
+const SHADOW_SMALL = "shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]";
+const ACTIVE_STATE = "active:shadow-none active:translate-x-[4px] active:translate-y-[4px]";
+
+const BOX_STYLE = `${BORDER} ${SHADOW} bg-white`;
+const INPUT_STYLE = `${BORDER} w-full p-4 font-black uppercase text-sm focus:outline-none focus:bg-yellow-50 placeholder:text-slate-400 mb-4`;
+const BTN_PRIMARY = `bg-[#2563eb] text-white ${BORDER} ${SHADOW_SMALL} font-black uppercase px-8 py-4 ${ACTIVE_STATE} transition-all flex items-center justify-center gap-2`;
+const BTN_SECONDARY = `bg-[#ffffff] text-black ${BORDER} ${SHADOW_SMALL} font-black uppercase px-8 py-4 ${ACTIVE_STATE} transition-all flex items-center justify-center gap-2`;
+
+export default function App() {
+  const [view, setView] = useState('landing'); // landing, add, open, vault
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  
+  // form state
+  const [folderName, setFolderName] = useState('');
+  const [password, setPassword] = useState('');
+  
+  // vault state
+  const [currentVault, setCurrentVault] = useState(null);
+  const [files, setFiles] = useState([]);
+
+  // helper to hash the strings so we don't store plain text
+  const getHash = async (str) => {
+    const msgUint8 = new TextEncoder().encode(str);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
+  const resetForm = () => {
+    setFolderName('');
+    setPassword('');
+    setError('');
+  };
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!supabase) return alert("hey, you need to plug in your supabase keys at the top of the file!");
+    setLoading(true);
+    setError('');
+
+    try {
+      const folderHash = await getHash(folderName.toLowerCase().trim());
+      const passHash = await getHash(password);
+
+      // check if it exists first
+      const { data: exists } = await supabase
+        .from('folders')
+        .select('folder_hash')
+        .eq('folder_hash', folderHash)
+        .maybeSingle();
+
+      if (exists) {
+        setError('vault name already taken.');
+        setLoading(false);
+        return;
+      }
+
+      const { error: insertErr } = await supabase
+        .from('folders')
+        .insert([{ folder_hash: folderHash, display_name: folderName, password_hash: passHash }]);
+
+      if (insertErr) throw insertErr;
+
+      enterVault(folderHash, folderName);
+    } catch (err) {
+      setError('couldnt create vault. check your table permissions.');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAccess = async (e) => {
+    e.preventDefault();
+    if (!supabase) return;
+    setLoading(true);
+    setError('');
+
+    try {
+      const folderHash = await getHash(folderName.toLowerCase().trim());
+      const passHash = await getHash(password);
+
+      const { data, error: fetchErr } = await supabase
+        .from('folders')
+        .select('*')
+        .eq('folder_hash', folderHash)
+        .maybeSingle();
+
+      if (!data || data.password_hash !== passHash) {
+        setError('invalid vault name or key.');
+      } else {
+        enterVault(folderHash, data.display_name);
+      }
+    } catch (err) {
+      setError('error connecting to cloud.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const enterVault = async (hashId, name) => {
+    setCurrentVault({ id: hashId, name });
+    setView('vault');
+    loadFiles(hashId);
+  };
+
+  const loadFiles = async (hashId) => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.storage.from('vaults').list(hashId);
+      if (error) throw error;
+      setFiles(data || []);
+    } catch (err) {
+      console.error("failed to load files", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !currentVault) return;
+
+    setLoading(true);
+    try {
+      const filePath = `${currentVault.id}/${file.name}`;
+      const { error } = await supabase.storage.from('vaults').upload(filePath, file);
+      if (error) throw error;
+      loadFiles(currentVault.id);
+    } catch (err) {
+      alert("upload failed. check your storage bucket policy.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // screen: interior of the vault
+  if (view === 'vault') {
+    return (
+      <div className="min-h-screen bg-[#f3f4f6] p-4 md:p-12 font-mono">
+        <div className="max-w-6xl mx-auto">
+          {/* squared header */}
+          <header className={`${BOX_STYLE} p-8 mb-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-6`}>
+            <div className="flex items-center gap-6">
+              <button 
+                onClick={() => setView('landing')} 
+                className={`p-3 bg-white ${BORDER} ${SHADOW_SMALL} ${ACTIVE_STATE}`}
+              >
+                <ArrowLeft size={32} strokeWidth={4} />
+              </button>
+              <div>
+                <h1 className="text-3xl font-black uppercase tracking-tighter flex items-center gap-3">
+                  <Folder size={32} strokeWidth={4} /> {currentVault.name}
+                </h1>
+                <p className="text-xs font-black bg-black text-white px-2 mt-1 inline-block">
+                  SECURE_ID: {currentVault.id.substring(0, 16)}
+                </p>
+              </div>
+            </div>
+            
+            <label className={BTN_PRIMARY + " cursor-pointer"}>
+              <Plus size={24} strokeWidth={4} /> Add File
+              <input type="file" className="hidden" onChange={handleUpload} disabled={loading} />
+            </label>
+          </header>
+
+          {/* file grid */}
+          {loading && files.length === 0 ? (
+            <div className="flex justify-center py-20">
+              <Loader2 className="animate-spin" size={48} strokeWidth={4} />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {files.map((file, i) => (
+                <div key={i} className={`${BOX_STYLE} p-6 flex flex-col group`}>
+                  <div className="bg-black text-white p-4 mb-4 flex items-center justify-center self-start">
+                    <FileText size={32} strokeWidth={3} />
+                  </div>
+                  <h3 className="font-black uppercase text-lg truncate mb-1">{file.name}</h3>
+                  <p className="text-[10px] font-bold text-slate-400 mb-6 uppercase">
+                    {(file.metadata?.size / 1024).toFixed(1)} KB • {new Date(file.created_at).toLocaleDateString()}
+                  </p>
+                  
+                  <a 
+                    href={`${SUPABASE_URL}/storage/v1/object/public/vaults/${currentVault.id}/${file.name}`}
+                    target="_blank"
+                    className={`${BTN_SECONDARY} mt-auto text-xs py-2`}
+                  >
+                    <Download size={16} strokeWidth={4} /> Fetch File
+                  </a>
+                </div>
+              ))}
+              
+              {files.length === 0 && !loading && (
+                <div className="col-span-full py-32 text-center border-[4px] border-dashed border-black bg-slate-100">
+                  <p className="font-black text-2xl uppercase text-slate-400 italic">No Data Found in This Vault</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // screen: home/entry
+  return (
+    <div className="min-h-screen bg-[#ffde03] flex items-center justify-center p-6 font-mono">
+      <div className="max-w-md w-full">
+        {/* main branded card */}
+        <div className={`${BOX_STYLE} p-10`}>
+          <div className="text-center mb-10">
+            <div className={`inline-block ${BORDER} p-6 bg-white mb-6 ${SHADOW_SMALL}`}>
+              <Shield size={64} strokeWidth={3} />
+            </div>
+            <h1 className="text-5xl font-[1000] uppercase tracking-tighter italic leading-none">
+              OpenVault
+            </h1>
+            <div className="bg-black text-white inline-block px-3 py-1 font-black text-xs uppercase mt-3">
+              Encrypted Local-First Logic
+            </div>
+          </div>
+
+          {view === 'landing' && (
+            <div className="flex flex-col gap-6">
+              <button onClick={() => { setView('open'); resetForm(); }} className={BTN_PRIMARY}>
+                <Eye size={24} strokeWidth={4} /> Access Vault
+              </button>
+              <button onClick={() => { setView('add'); resetForm(); }} className={BTN_SECONDARY}>
+                <Plus size={24} strokeWidth={4} /> Create Vault
+              </button>
+            </div>
+          )}
+
+          {(view === 'add' || view === 'open') && (
+            <form onSubmit={view === 'add' ? handleCreate : handleAccess} className="flex flex-col">
+              <div className="flex items-center gap-3 mb-8 border-b-[4px] border-black pb-4">
+                <button type="button" onClick={() => setView('landing')} className="hover:text-blue-600 transition-colors">
+                  <ArrowLeft size={24} strokeWidth={4} />
+                </button>
+                <h2 className="font-black uppercase text-xl italic">
+                  {view === 'add' ? 'New Deployment' : 'System Access'}
+                </h2>
+              </div>
+              
+              <div className="mb-2">
+                <label className="text-xs font-black uppercase block mb-1">Vault Alias</label>
+                <div className="relative">
+                  <Hash className="absolute left-4 top-4 text-black" size={18} strokeWidth={3} />
+                  <input 
+                    className={`${INPUT_STYLE} pl-12`} 
+                    value={folderName}
+                    onChange={e => setFolderName(e.target.value)}
+                    placeholder="E.G. PROJECT_X"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <label className="text-xs font-black uppercase block mb-1">Secret Key</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-4 text-black" size={18} strokeWidth={3} />
+                  <input 
+                    type="password"
+                    className={`${INPUT_STYLE} pl-12`} 
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+              </div>
+
+              {error && (
+                <div className="bg-red-500 text-white p-4 font-black text-xs uppercase border-[4px] border-black mb-6 animate-bounce">
+                  Error: {error}
+                </div>
+              )}
+
+              <button type="submit" disabled={loading} className={BTN_PRIMARY}>
+                {loading ? <Loader2 className="animate-spin" size={24} strokeWidth={4} /> : 'Execute Command'}
+              </button>
+            </form>
+          )}
+        </div>
+        
+        {/* footer stats */}
+        <div className="mt-10 flex justify-between font-black text-[10px] uppercase text-black tracking-widest px-2">
+          <span className="flex items-center gap-2 bg-white px-2 border-2 border-black">Status: Online</span>
+          <span className="flex items-center gap-2 bg-white px-2 border-2 border-black tracking-tighter">v2.0_squared_logic</span>
+        </div>
+      </div>
+    </div>
+  );
+}
