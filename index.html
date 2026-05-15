@@ -1,23 +1,138 @@
-// database setup
-const SUPABASE_URL = 'https://jkqayyoyrzmrscqjkeqr.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImprcWF5eW95cnptcnNjcWprZXFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2MTE3MjYsImV4cCI6MjA5MzE4NzcyNn0.IEsgMQsD5Sq4heWsmafHowKLh1KfXU___DcPBDATv38';
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenVault | Squared Logic</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
 
-/**
- * hashes strings so we never store plain-text names or passwords.
- * this is the "zero-knowledge" part of openvault.
- */
-async function generateHash(text) {
-    const msgUint8 = new TextEncoder().encode(text.toLowerCase().trim());
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-    return Array.from(new Uint8Array(hashBuffer))
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
-}
+    <script src="vault-logic.js"></script>
 
-// export these to be used by our react ui
-window.VaultEngine = {
-    client: supabaseClient,
-    hash: generateHash,
-    storageUrl: `${SUPABASE_URL}/storage/v1/object/public/vaults/`
-};
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+        body { font-family: 'Space Mono', monospace; background-color: #ffde03; }
+        .neubrutal-border { border: 4px solid black; }
+        .neubrutal-shadow { shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]; }
+        .btn-active { transition: all 0.1s; }
+        .btn-active:active { transform: translate(4px, 4px); box-shadow: none; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+        const { client, hash, storageUrl } = window.VaultEngine;
+
+        // reused squared styles
+        const BOX = "bg-white border-[4px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]";
+        const INPUT = "w-full border-[4px] border-black p-4 font-bold uppercase outline-none focus:bg-blue-50 mb-4";
+        const BTN_BLUE = "w-full bg-[#2563eb] text-white border-[4px] border-black p-4 font-black uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] btn-active mb-2";
+
+        function App() {
+            const [view, setView] = useState('home');
+            const [loading, setLoading] = useState(false);
+            const [vault, setVault] = useState(null);
+            const [files, setFiles] = useState([]);
+            const [form, setForm] = useState({ name: '', pass: '' });
+
+            const loadFiles = async (id) => {
+                const { data } = await client.storage.from('vaults').list(id);
+                setFiles(data || []);
+            };
+
+            const handleEntry = async (e, mode) => {
+                e.preventDefault();
+                setLoading(true);
+                const id = await hash(form.name);
+                const pHash = await hash(form.pass);
+
+                if (mode === 'create') {
+                    await client.from('folders').insert([{ folder_hash: id, display_name: form.name, password_hash: pHash }]);
+                } else {
+                    const { data } = await client.from('folders').select('*').eq('folder_hash', id).maybeSingle();
+                    if (!data || data.password_hash !== pHash) {
+                        alert("access denied: incorrect alias or key.");
+                        setLoading(false);
+                        return;
+                    }
+                }
+                setVault({ id, name: form.name });
+                setView('inside');
+                loadFiles(id);
+                setLoading(false);
+            };
+
+            const upload = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setLoading(true);
+                await client.storage.from('vaults').upload(`${vault.id}/${file.name}`, file);
+                loadFiles(vault.id);
+                setLoading(false);
+            };
+
+            if (view === 'inside') return (
+                <div className="p-8 max-w-4xl mx-auto">
+                    <header className={`${BOX} p-6 mb-8 flex justify-between items-center`}>
+                        <h2 className="font-black text-xl uppercase italic tracking-tighter">{vault.name}</h2>
+                        <label className="bg-black text-white px-6 py-2 border-2 border-black font-bold cursor-pointer hover:bg-blue-600 transition-colors">
+                            + UPLOAD
+                            <input type="file" className="hidden" onChange={upload} />
+                        </label>
+                    </header>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        {files.map(f => (
+                            <div key={f.name} className={`${BOX} p-4 flex justify-between items-center shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]`}>
+                                <span className="font-bold truncate text-sm uppercase">{f.name}</span>
+                                <a href={`${storageUrl}${vault.id}/${f.name}`} target="_blank" className="bg-blue-600 text-white p-2 border-2 border-black">
+                                    <i data-lucide="download"></i>
+                                </a>
+                            </div>
+                        ))}
+                    </div>
+                    <button onClick={() => window.location.reload()} className="mt-12 underline font-black uppercase text-xs">Terminate Session</button>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen flex items-center justify-center p-6">
+                    <div className={`${BOX} p-10 w-full max-w-md text-center`}>
+                        <div className="border-[4px] border-black inline-block p-4 mb-4 bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                            <i data-lucide="shield" size="48"></i>
+                        </div>
+                        <h1 className="text-4xl font-[1000] uppercase italic tracking-tighter mb-2">OpenVault</h1>
+                        <p className="text-[10px] bg-black text-white inline-block px-2 py-1 font-black mb-8 uppercase">Direct Logic Storage</p>
+
+                        {view === 'home' ? (
+                            <div className="flex flex-col gap-2">
+                                <button onClick={() => setView('login')} className={BTN_BLUE}>Unlock Vault</button>
+                                <button onClick={() => setView('setup')} className="w-full bg-white border-[4px] border-black p-4 font-black uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] btn-active">New Vault</button>
+                            </div>
+                        ) : (
+                            <form onSubmit={(e) => handleEntry(e, view === 'setup' ? 'create' : 'login')}>
+                                <input className={INPUT} placeholder="Vault Alias" onChange={e => setForm({...form, name: e.target.value})} required />
+                                <input type="password" className={INPUT} placeholder="Secret Key" onChange={e => setForm({...form, pass: e.target.value})} required />
+                                <button type="submit" className={BTN_BLUE}>{loading ? 'Syncing...' : 'Execute'}</button>
+                                <button type="button" onClick={() => setView('home')} className="text-[10px] font-black uppercase underline mt-4">Cancel</button>
+                            </form>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+        
+        // human note: lucide icons need a tiny delay to find the react elements
+        setTimeout(() => lucide.createIcons(), 500);
+    </script>
+</body>
+</html>
