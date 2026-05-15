@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenVault | Squared Logic</title>
+    <title>OpenVault | Secure Terminal</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -11,24 +11,64 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
-        body { font-family: 'Space Mono', monospace; background-color: #ffde03; margin: 0; }
-        .neubrutal-shadow { box-shadow: 8px 8px 0px 0px rgba(0,0,0,1); }
-        .btn-active:active { transform: translate(4px, 4px); box-shadow: none !important; }
+        /* jetbrains mono font */
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+        
+        body { 
+            font-family: 'JetBrains Mono', monospace; 
+            background-color: #0c0c0c; /* windows terminal black */
+            color: #cccccc;
+            margin: 0;
+        }
+
+        /* win10 style scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e1e1e; }
+        ::-webkit-scrollbar-thumb { background: #3e3e3e; }
+        ::-webkit-scrollbar-thumb:hover { background: #555555; }
+
+        .win-blur {
+            background: rgba(30, 30, 30, 0.8);
+            backdrop-filter: blur(10px);
+        }
+
+        .win-border {
+            border: 1px solid #3e3e3e;
+        }
+
+        .win-btn {
+            background: #2b2b2b;
+            border: 1px solid #3e3e3e;
+            transition: all 0.2s;
+        }
+
+        .win-btn:hover {
+            background: #353535;
+            border-color: #0078d4; /* win10 blue */
+        }
+
+        .win-input {
+            background: #1e1e1e;
+            border: 1px solid #3e3e3e;
+            border-bottom: 2px solid #3e3e3e;
+            transition: border-color 0.2s;
+        }
+
+        .win-input:focus {
+            border-bottom-color: #0078d4;
+            outline: none;
+        }
     </style>
 </head>
 <body>
     <div id="root"></div>
     <script type="text/babel">
-        const { useState } = React;
+        const { useState, useEffect } = React;
 
-        // human note: i put your url here already. just add the anon key!
+        // your supabase setup
         const SUPABASE_URL = 'https://jkqayyoyrzmrscqjkeqr.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImprcWF5eW95cnptcnNjcWprZXFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2MTE3MjYsImV4cCI6MjA5MzE4NzcyNn0.IEsgMQsD5Sq4heWsmafHowKLh1KfXU___DcPBDATv38';
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-        const BOX = "bg-white border-[4px] border-black shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]";
-        const BTN = "w-full border-[4px] border-black p-4 font-black uppercase shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] btn-active mb-2 transition-all";
 
         function App() {
             const [view, setView] = useState('home');
@@ -54,55 +94,111 @@
                 } else {
                     const { data } = await supabaseClient.from('folders').select('*').eq('folder_hash', id).maybeSingle();
                     if (!data || data.password_hash !== pHash) {
-                        alert("access denied.");
+                        alert("Access Denied: Authentication Failure");
                         setLoading(false);
                         return;
                     }
                 }
                 setVault({ id, name: form.name });
-                const { data: fileList } = await supabaseClient.storage.from('vaults').list(id);
-                setFiles(fileList || []);
+                refreshFiles(id);
                 setView('inside');
                 setLoading(false);
             };
 
+            const refreshFiles = async (id) => {
+                const { data } = await supabaseClient.storage.from('vaults').list(id);
+                setFiles(data || []);
+            };
+
+            const handleUpload = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setLoading(true);
+                await supabaseClient.storage.from('vaults').upload(`${vault.id}/${file.name}`, file);
+                await refreshFiles(vault.id);
+                setLoading(false);
+            };
+
             if (view === 'inside') return (
-                <div className="p-8 max-w-4xl mx-auto">
-                    <div className={`${BOX} p-6 mb-8 flex justify-between items-center`}>
-                        <h2 className="font-black uppercase italic">{vault.name}</h2>
-                        <button onClick={() => window.location.reload()} className="text-xs font-bold underline">EXIT</button>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        {files.length > 0 ? files.map(f => (
-                            <div key={f.name} className={`${BOX} p-4 flex justify-between items-center`}>
-                                <span className="font-bold truncate text-sm uppercase">{f.name}</span>
-                                <a href={`${SUPABASE_URL}/storage/v1/object/public/vaults/${vault.id}/${f.name}`} target="_blank" className="bg-black text-white p-2 border-2 border-black">
-                                    <i data-lucide="download"></i>
-                                </a>
+                <div className="min-h-screen p-4 md:p-10">
+                    <div className="max-w-5xl mx-auto">
+                        <header className="win-blur win-border p-6 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                            <div>
+                                <h2 className="text-white font-bold text-lg flex items-center gap-2 lowercase">
+                                    <span className="text-[#0078d4]">directory:</span> {vault.name}
+                                </h2>
+                                <p className="text-[10px] opacity-50 mt-1">Status: encrypted_connection_active</p>
                             </div>
-                        )) : <p className="font-bold italic opacity-50">Vault is empty...</p>}
+                            <div className="flex gap-3">
+                                <label className="win-btn px-4 py-2 text-xs font-bold cursor-pointer flex items-center gap-2">
+                                    <i data-lucide="upload" size="14"></i> upload_file
+                                    <input type="file" className="hidden" onChange={handleUpload} />
+                                </label>
+                                <button onClick={() => window.location.reload()} className="win-btn px-4 py-2 text-xs font-bold text-red-400">
+                                    exit
+                                </button>
+                            </div>
+                        </header>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {files.length > 0 ? files.map(f => (
+                                <div key={f.name} className="win-blur win-border p-4 flex flex-col group">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <i data-lucide="file" className="text-[#0078d4]"></i>
+                                        <a href={`${SUPABASE_URL}/storage/v1/object/public/vaults/${vault.id}/${f.name}`} 
+                                           target="_blank" 
+                                           className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <i data-lucide="download" size="18" className="hover:text-white"></i>
+                                        </a>
+                                    </div>
+                                    <span className="text-sm font-bold truncate lowercase">{f.name}</span>
+                                    <span className="text-[9px] opacity-40 mt-1 uppercase">object_type: data</span>
+                                </div>
+                            )) : (
+                                <div className="col-span-full py-20 text-center opacity-30 border border-dashed border-[#3e3e3e]">
+                                    <p className="text-sm italic">no files found in this cluster</p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             );
 
             return (
-                <div className="min-h-screen flex items-center justify-center p-6">
-                    <div className={`${BOX} p-10 w-full max-w-md text-center`}>
-                        <div className="border-[4px] border-black inline-block p-4 mb-4 bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                            <i data-lucide="shield" size="48"></i>
+                <div className="min-h-screen flex items-center justify-center p-6 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
+                    <div className="win-blur win-border p-8 w-full max-w-sm">
+                        <div className="flex items-center gap-3 mb-8">
+                            <div className="w-8 h-8 bg-[#0078d4] flex items-center justify-center">
+                                <i data-lucide="shield" className="text-white" size="20"></i>
+                            </div>
+                            <h1 className="text-xl font-bold text-white tracking-tight">OpenVault <span className="opacity-30 font-normal">v2.1</span></h1>
                         </div>
-                        <h1 className="text-4xl font-[1000] uppercase italic tracking-tighter mb-8">OpenVault</h1>
+
                         {view === 'home' ? (
-                            <div className="flex flex-col gap-2">
-                                <button onClick={() => setView('login')} className={`${BTN} bg-[#2563eb] text-white`}>Unlock</button>
-                                <button onClick={() => setView('setup')} className={`${BTN} bg-white text-black`}>New Vault</button>
+                            <div className="space-y-3">
+                                <button onClick={() => setView('login')} className="win-btn w-full p-3 text-sm text-white font-bold flex justify-between items-center group">
+                                    access_vault <i data-lucide="chevron-right" size="16" className="group-hover:translate-x-1 transition-transform"></i>
+                                </button>
+                                <button onClick={() => setView('setup')} className="win-btn w-full p-3 text-sm opacity-70 flex justify-between items-center group">
+                                    initialize_new <i data-lucide="plus" size="16"></i>
+                                </button>
                             </div>
                         ) : (
-                            <form onSubmit={(e) => handleEntry(e, view === 'setup' ? 'create' : 'login')}>
-                                <input className="w-full border-[4px] border-black p-4 font-bold uppercase mb-4 outline-none" placeholder="Alias" onChange={e => setForm({...form, name: e.target.value})} required />
-                                <input type="password" className="w-full border-[4px] border-black p-4 font-bold uppercase mb-4 outline-none" placeholder="Key" onChange={e => setForm({...form, pass: e.target.value})} required />
-                                <button type="submit" className={`${BTN} bg-[#2563eb] text-white`}>{loading ? '...' : 'Execute'}</button>
-                                <button type="button" onClick={() => setView('home')} className="text-xs font-black uppercase underline mt-4">Back</button>
+                            <form onSubmit={(e) => handleEntry(e, view === 'setup' ? 'create' : 'login')} className="space-y-4">
+                                <div>
+                                    <label className="text-[10px] uppercase opacity-50 block mb-1">vault_alias</label>
+                                    <input className="win-input w-full p-3 text-sm lowercase" placeholder="e.g. shadow_project" onChange={e => setForm({...form, name: e.target.value})} required autoFocus />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] uppercase opacity-50 block mb-1">secure_key</label>
+                                    <input type="password" className="win-input w-full p-3 text-sm" placeholder="••••••••" onChange={e => setForm({...form, pass: e.target.value})} required />
+                                </div>
+                                <button type="submit" className="win-btn w-full p-3 text-sm text-white bg-[#0078d4]/20 border-[#0078d4]/50 hover:bg-[#0078d4] transition-all font-bold">
+                                    {loading ? 'processing...' : 'authenticate'}
+                                </button>
+                                <button type="button" onClick={() => setView('home')} className="w-full text-[10px] uppercase opacity-40 hover:opacity-100 transition-opacity">
+                                    abort_operation
+                                </button>
                             </form>
                         )}
                     </div>
@@ -112,6 +208,8 @@
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
+        
+        // re-run lucide icons whenever view changes
         setTimeout(() => lucide.createIcons(), 500);
     </script>
 </body>
