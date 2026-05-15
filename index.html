@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenVault | Secure Terminal</title>
+    <title>OpenVault</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -11,53 +11,14 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        /* jetbrains mono font */
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
-        
-        body { 
-            font-family: 'JetBrains Mono', monospace; 
-            background-color: #0c0c0c; /* windows terminal black */
-            color: #cccccc;
-            margin: 0;
-        }
-
-        /* win10 style scrollbar */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #1e1e1e; }
-        ::-webkit-scrollbar-thumb { background: #3e3e3e; }
-        ::-webkit-scrollbar-thumb:hover { background: #555555; }
-
-        .win-blur {
-            background: rgba(30, 30, 30, 0.8);
-            backdrop-filter: blur(10px);
-        }
-
-        .win-border {
-            border: 1px solid #3e3e3e;
-        }
-
-        .win-btn {
-            background: #2b2b2b;
-            border: 1px solid #3e3e3e;
-            transition: all 0.2s;
-        }
-
-        .win-btn:hover {
-            background: #353535;
-            border-color: #0078d4; /* win10 blue */
-        }
-
-        .win-input {
-            background: #1e1e1e;
-            border: 1px solid #3e3e3e;
-            border-bottom: 2px solid #3e3e3e;
-            transition: border-color 0.2s;
-        }
-
-        .win-input:focus {
-            border-bottom-color: #0078d4;
-            outline: none;
-        }
+        body { font-family: 'JetBrains Mono', monospace; background-color: #0c0c0c; color: #cccccc; margin: 0; }
+        .win-blur { background: rgba(30, 30, 30, 0.8); backdrop-filter: blur(10px); }
+        .win-border { border: 1px solid #3e3e3e; }
+        .win-btn { background: #2b2b2b; border: 1px solid #3e3e3e; transition: all 0.2s; }
+        .win-btn:hover { background: #353535; border-color: #0078d4; }
+        .win-input { background: #1e1e1e; border: 1px solid #3e3e3e; border-bottom: 2px solid #3e3e3e; transition: border-color 0.2s; color: white; }
+        .win-input:focus { border-bottom-color: #0078d4; outline: none; }
     </style>
 </head>
 <body>
@@ -65,7 +26,7 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // your supabase setup
+        // replace these with your actual keys
         const SUPABASE_URL = 'https://jkqayyoyrzmrscqjkeqr.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImprcWF5eW95cnptcnNjcWprZXFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2MTE3MjYsImV4cCI6MjA5MzE4NzcyNn0.IEsgMQsD5Sq4heWsmafHowKLh1KfXU___DcPBDATv38';
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -83,27 +44,23 @@
                 return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
             };
 
+            const refreshFiles = async (id) => {
+                const { data } = await supabaseClient.storage.from('vaults').list(id);
+                setFiles(data || []);
+            };
+
             const handleEntry = async (e, mode) => {
                 e.preventDefault();
                 setLoading(true);
                 const id = await getHash(form.name);
                 const pHash = await getHash(form.pass);
 
-// inside your handleEntry function
                 if (mode === 'create') {
-                    // This part saves the "Map" to the database
-                    const { error } = await supabaseClient
-                        .from('folders')
-                        .insert([{ 
-                            folder_hash: id, 
-                            display_name: form.name, 
-                            password_hash: pHash 
-                        }]);
-                    if (error) {
-                        console.error("Database Save Failed:", error.message);
-                        alert("Error saving vault info: " + error.message);
-                        return;
-                    }
+                    const { error } = await supabaseClient.from('folders').insert([{ folder_hash: id, display_name: form.name, password_hash: pHash }]);
+                    if (error) { alert("Vault name taken or error occurred."); setLoading(false); return; }
+                } else {
+                    const { data } = await supabaseClient.from('folders').select('*').eq('folder_hash', id).maybeSingle();
+                    if (!data || data.password_hash !== pHash) { alert("Incorrect vault name or password."); setLoading(false); return; }
                 }
                 setVault({ id, name: form.name });
                 refreshFiles(id);
@@ -111,12 +68,7 @@
                 setLoading(false);
             };
 
-            const refreshFiles = async (id) => {
-                const { data } = await supabaseClient.storage.from('vaults').list(id);
-                setFiles(data || []);
-            };
-
-            const handleUpload = async (e) => {
+            const uploadFile = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 setLoading(true);
@@ -125,86 +77,98 @@
                 setLoading(false);
             };
 
+            const deleteFile = async (fileName) => {
+                if (!confirm(`Delete "${fileName}"?`)) return;
+                setLoading(true);
+                await supabaseClient.storage.from('vaults').remove([`${vault.id}/${fileName}`]);
+                await refreshFiles(vault.id);
+                setLoading(false);
+            };
+
+            const deleteVault = async () => {
+                const check = prompt(`To delete this vault, type the vault name ("${vault.name}") below:`);
+                if (check !== vault.name) return;
+
+                setLoading(true);
+                // delete from db
+                await supabaseClient.from('folders').delete().eq('folder_hash', vault.id);
+                // clear storage
+                if (files.length > 0) {
+                    const paths = files.map(f => `${vault.id}/${f.name}`);
+                    await supabaseClient.storage.from('vaults').remove(paths);
+                }
+                window.location.reload();
+            };
+
             if (view === 'inside') return (
-                <div className="min-h-screen p-4 md:p-10">
-                    <div className="max-w-5xl mx-auto">
-                        <header className="win-blur win-border p-6 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="min-h-screen p-6 md:p-12">
+                    <div className="max-w-4xl mx-auto">
+                        <header className="win-blur win-border p-6 mb-8 flex justify-between items-center">
                             <div>
-                                <h2 className="text-white font-bold text-lg flex items-center gap-2 lowercase">
-                                    <span className="text-[#0078d4]">directory:</span> {vault.name}
-                                </h2>
-                                <p className="text-[10px] opacity-50 mt-1">Status: encrypted_connection_active</p>
+                                <h2 className="text-white font-bold text-xl">{vault.name}</h2>
+                                <p className="text-[10px] opacity-50 uppercase tracking-widest mt-1">Status: Secured</p>
                             </div>
-                            <div className="flex gap-3">
+                            <div className="flex gap-2">
                                 <label className="win-btn px-4 py-2 text-xs font-bold cursor-pointer flex items-center gap-2">
-                                    <i data-lucide="upload" size="14"></i> upload_file
-                                    <input type="file" className="hidden" onChange={handleUpload} />
+                                    <i data-lucide="upload" size="14"></i> Upload
+                                    <input type="file" className="hidden" onChange={uploadFile} />
                                 </label>
-                                <button onClick={() => window.location.reload()} className="win-btn px-4 py-2 text-xs font-bold text-red-400">
-                                    exit
-                                </button>
+                                <button onClick={deleteVault} className="win-btn px-4 py-2 text-xs font-bold text-red-400 hover:border-red-500">Delete Vault</button>
+                                <button onClick={() => window.location.reload()} className="win-btn px-4 py-2 text-xs font-bold">Log Out</button>
                             </div>
                         </header>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {files.length > 0 ? files.map(f => (
-                                <div key={f.name} className="win-blur win-border p-4 flex flex-col group">
-                                    <div className="flex items-start justify-between mb-4">
-                                        <i data-lucide="file" className="text-[#0078d4]"></i>
-                                        <a href={`${SUPABASE_URL}/storage/v1/object/public/vaults/${vault.id}/${f.name}`} 
-                                           target="_blank" 
-                                           className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <i data-lucide="download" size="18" className="hover:text-white"></i>
-                                        </a>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {files.map(f => (
+                                <div key={f.name} className="win-blur win-border p-4 flex items-center justify-between group">
+                                    <div className="flex items-center gap-3 overflow-hidden">
+                                        <i data-lucide="file" size="18" className="text-[#0078d4] shrink-0"></i>
+                                        <span className="text-sm truncate">{f.name}</span>
                                     </div>
-                                    <span className="text-sm font-bold truncate lowercase">{f.name}</span>
-                                    <span className="text-[9px] opacity-40 mt-1 uppercase">object_type: data</span>
+                                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <a href={`${SUPABASE_URL}/storage/v1/object/public/vaults/${vault.id}/${f.name}`} download className="p-1 hover:text-white">
+                                            <i data-lucide="download" size="18"></i>
+                                        </a>
+                                        <button onClick={() => deleteFile(f.name)} className="p-1 hover:text-red-500">
+                                            <i data-lucide="trash-2" size="18"></i>
+                                        </button>
+                                    </div>
                                 </div>
-                            )) : (
-                                <div className="col-span-full py-20 text-center opacity-30 border border-dashed border-[#3e3e3e]">
-                                    <p className="text-sm italic">no files found in this cluster</p>
-                                </div>
-                            )}
+                            ))}
                         </div>
                     </div>
                 </div>
             );
 
             return (
-                <div className="min-h-screen flex items-center justify-center p-6 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
-                    <div className="win-blur win-border p-8 w-full max-w-sm">
-                        <div className="flex items-center gap-3 mb-8">
-                            <div className="w-8 h-8 bg-[#0078d4] flex items-center justify-center">
-                                <i data-lucide="shield" className="text-white" size="20"></i>
+                <div className="min-h-screen flex items-center justify-center p-6 bg-[#050505]">
+                    <div className="win-blur win-border p-10 w-full max-w-sm">
+                        <div className="flex items-center gap-3 mb-10">
+                            <div className="w-10 h-10 bg-[#0078d4] flex items-center justify-center">
+                                <i data-lucide="lock" className="text-white" size="20"></i>
                             </div>
-                            <h1 className="text-xl font-bold text-white tracking-tight">OpenVault <span className="opacity-30 font-normal">v2.1</span></h1>
+                            <h1 className="text-2xl font-bold text-white tracking-tight">OpenVault</h1>
                         </div>
 
                         {view === 'home' ? (
-                            <div className="space-y-3">
-                                <button onClick={() => setView('login')} className="win-btn w-full p-3 text-sm text-white font-bold flex justify-between items-center group">
-                                    access_vault <i data-lucide="chevron-right" size="16" className="group-hover:translate-x-1 transition-transform"></i>
-                                </button>
-                                <button onClick={() => setView('setup')} className="win-btn w-full p-3 text-sm opacity-70 flex justify-between items-center group">
-                                    initialize_new <i data-lucide="plus" size="16"></i>
-                                </button>
+                            <div className="space-y-4">
+                                <button onClick={() => setView('login')} className="win-btn w-full p-4 text-sm text-white font-bold">Log In</button>
+                                <button onClick={() => setView('setup')} className="win-btn w-full p-4 text-sm opacity-60">Create New Vault</button>
                             </div>
                         ) : (
-                            <form onSubmit={(e) => handleEntry(e, view === 'setup' ? 'create' : 'login')} className="space-y-4">
+                            <form onSubmit={(e) => handleEntry(e, view === 'setup' ? 'create' : 'login')} className="space-y-5">
                                 <div>
-                                    <label className="text-[10px] uppercase opacity-50 block mb-1">vault_alias</label>
-                                    <input className="win-input w-full p-3 text-sm lowercase" placeholder="e.g. shadow_project" onChange={e => setForm({...form, name: e.target.value})} required autoFocus />
+                                    <label className="text-[10px] uppercase opacity-50 block mb-1">Vault Name</label>
+                                    <input className="win-input w-full p-3 text-sm" placeholder="Enter name" onChange={e => setForm({...form, name: e.target.value})} required />
                                 </div>
                                 <div>
-                                    <label className="text-[10px] uppercase opacity-50 block mb-1">secure_key</label>
+                                    <label className="text-[10px] uppercase opacity-50 block mb-1">Password</label>
                                     <input type="password" className="win-input w-full p-3 text-sm" placeholder="••••••••" onChange={e => setForm({...form, pass: e.target.value})} required />
                                 </div>
-                                <button type="submit" className="win-btn w-full p-3 text-sm text-white bg-[#0078d4]/20 border-[#0078d4]/50 hover:bg-[#0078d4] transition-all font-bold">
-                                    {loading ? 'processing...' : 'authenticate'}
+                                <button type="submit" className="win-btn w-full p-4 text-sm text-white bg-[#0078d4] border-none font-bold">
+                                    {loading ? 'Working...' : (view === 'setup' ? 'Create' : 'Log In')}
                                 </button>
-                                <button type="button" onClick={() => setView('home')} className="w-full text-[10px] uppercase opacity-40 hover:opacity-100 transition-opacity">
-                                    abort_operation
-                                </button>
+                                <button type="button" onClick={() => setView('home')} className="w-full text-[10px] uppercase opacity-40 hover:opacity-100 transition-opacity">Go Back</button>
                             </form>
                         )}
                     </div>
@@ -214,9 +178,7 @@
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
-        
-        // re-run lucide icons whenever view changes
-        setTimeout(() => lucide.createIcons(), 500);
+        setInterval(() => lucide.createIcons(), 1000); // keep icons fresh
     </script>
 </body>
 </html>
