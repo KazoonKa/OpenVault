@@ -89,13 +89,19 @@
                 const id = await getHash(form.name);
                 const pHash = await getHash(form.pass);
 
+// inside your handleEntry function
                 if (mode === 'create') {
-                    await supabaseClient.from('folders').insert([{ folder_hash: id, display_name: form.name, password_hash: pHash }]);
-                } else {
-                    const { data } = await supabaseClient.from('folders').select('*').eq('folder_hash', id).maybeSingle();
-                    if (!data || data.password_hash !== pHash) {
-                        alert("Access Denied: Authentication Failure");
-                        setLoading(false);
+                    // This part saves the "Map" to the database
+                    const { error } = await supabaseClient
+                        .from('folders')
+                        .insert([{ 
+                            folder_hash: id, 
+                            display_name: form.name, 
+                            password_hash: pHash 
+                        }]);
+                    if (error) {
+                        console.error("Database Save Failed:", error.message);
+                        alert("Error saving vault info: " + error.message);
                         return;
                     }
                 }
