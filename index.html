@@ -1,178 +1,23 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenVault | Secure Storage</title>
-    <!-- tailwind for the squared layout -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- react and supabase libraries -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- lucide icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
-        body { font-family: 'Space Mono', monospace; }
-        .neubrutal-shadow { shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]; }
-    </style>
-</head>
-<body class="bg-[#ffde03]">
-    <div id="root"></div>
+// database setup
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    <script type="text/babel">
-        const { useState, useEffect } = React;
+/**
+ * hashes strings so we never store plain-text names or passwords.
+ * this is the "zero-knowledge" part of openvault.
+ */
+async function generateHash(text) {
+    const msgUint8 = new TextEncoder().encode(text.toLowerCase().trim());
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+    return Array.from(new Uint8Array(hashBuffer))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+}
 
-        // human note: plug your details from the supabase api settings here
-        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; 
-        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-        // design constants for that squared look
-        const BORDER = "border-[4px] border-black";
-        const SHADOW = "shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]";
-        const SHADOW_SMALL = "shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]";
-        const ACTIVE = "active:shadow-none active:translate-x-[4px] active:translate-y-[4px] transition-all";
-
-        function OpenVault() {
-            const [view, setView] = useState('landing');
-            const [loading, setLoading] = useState(false);
-            const [error, setError] = useState('');
-            const [folderName, setFolderName] = useState('');
-            const [password, setPassword] = useState('');
-            const [currentVault, setCurrentVault] = useState(null);
-            const [files, setFiles] = useState([]);
-
-            // hashing function for folder names and passwords
-            const getHash = async (str) => {
-                const msgUint8 = new TextEncoder().encode(str);
-                const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-                return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-            };
-
-            const handleCreate = async (e) => {
-                e.preventDefault();
-                setLoading(true);
-                setError('');
-                try {
-                    const fHash = await getHash(folderName.toLowerCase().trim());
-                    const pHash = await getHash(password);
-                    
-                    const { data: exists } = await supabase.from('folders').select('folder_hash').eq('folder_hash', fHash).maybeSingle();
-                    if (exists) { setError('vault name taken.'); setLoading(false); return; }
-
-                    await supabase.from('folders').insert([{ folder_hash: fHash, display_name: folderName, password_hash: pHash }]);
-                    enterVault(fHash, folderName);
-                } catch (err) { setError('system error.'); } finally { setLoading(false); }
-            };
-
-            const handleAccess = async (e) => {
-                e.preventDefault();
-                setLoading(true);
-                setError('');
-                try {
-                    const fHash = await getHash(folderName.toLowerCase().trim());
-                    const pHash = await getHash(password);
-                    const { data } = await supabase.from('folders').select('*').eq('folder_hash', fHash).maybeSingle();
-                    
-                    if (data && data.password_hash === pHash) enterVault(fHash, data.display_name);
-                    else setError('invalid credentials.');
-                } catch (err) { setError('access denied.'); } finally { setLoading(false); }
-            };
-
-            const enterVault = (id, name) => {
-                setCurrentVault({ id, name });
-                setView('vault');
-                fetchFiles(id);
-            };
-
-            const fetchFiles = async (id) => {
-                const { data } = await supabase.storage.from('vaults').list(id);
-                setFiles(data || []);
-            };
-
-            const uploadFile = async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                setLoading(true);
-                await supabase.storage.from('vaults').upload(`${currentVault.id}/${file.name}`, file);
-                fetchFiles(currentVault.id);
-                setLoading(false);
-            };
-
-            if (view === 'vault') return (
-                <div className="min-h-screen bg-slate-100 p-8">
-                    <div className="max-w-4xl mx-auto">
-                        <div className={`bg-white ${BORDER} ${SHADOW} p-6 mb-8 flex justify-between items-center`}>
-                            <div className="flex items-center gap-4">
-                                <button onClick={() => setView('landing')} className={`p-2 bg-white ${BORDER} ${SHADOW_SMALL} ${ACTIVE}`}>
-                                    <lucide.ArrowLeft />
-                                </button>
-                                <h1 className="text-2xl font-black uppercase italic">{currentVault.name}</h1>
-                            </div>
-                            <label className={`bg-blue-600 text-white ${BORDER} ${SHADOW_SMALL} ${ACTIVE} px-4 py-2 cursor-pointer font-bold flex gap-2`}>
-                                <lucide.Plus /> UPLOAD
-                                <input type="file" className="hidden" onChange={uploadFile} />
-                            </label>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                            {files.map(f => (
-                                <div key={f.name} className={`bg-white ${BORDER} ${SHADOW_SMALL} p-4 flex justify-between items-center`}>
-                                    <span className="font-bold truncate mr-2 uppercase text-sm">{f.name}</span>
-                                    <a href={`${SUPABASE_URL}/storage/v1/object/public/vaults/${currentVault.id}/${f.name}`} target="_blank" className="bg-black text-white p-2">
-                                        <lucide.Download size={18} />
-                                    </a>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            );
-
-            return (
-                <div className="min-h-screen flex items-center justify-center p-6">
-                    <div className={`bg-white ${BORDER} ${SHADOW} p-10 max-w-md w-full`}>
-                        <div className="text-center mb-10">
-                            <div className={`inline-block ${BORDER} p-4 bg-white mb-4 ${SHADOW_SMALL}`}>
-                                <lucide.Shield size={48} />
-                            </div>
-                            <h1 className="text-4xl font-black uppercase italic tracking-tighter">OpenVault</h1>
-                            <p className="text-[10px] font-bold bg-black text-white inline-block px-2 mt-2">SQUARED STORAGE LOGIC</p>
-                        </div>
-
-                        {view === 'landing' ? (
-                            <div className="flex flex-col gap-4">
-                                <button onClick={() => setView('open')} className={`bg-blue-600 text-white ${BORDER} ${SHADOW_SMALL} ${ACTIVE} py-4 font-black`}>VIEW VAULT</button>
-                                <button onClick={() => setView('add')} className={`bg-white text-black ${BORDER} ${SHADOW_SMALL} ${ACTIVE} py-4 font-black`}>ADD FOLDER</button>
-                            </div>
-                        ) : (
-                            <form onSubmit={view === 'add' ? handleCreate : handleAccess} className="flex flex-col gap-4">
-                                <input className={`${BORDER} p-3 font-bold uppercase text-sm outline-none`} placeholder="FOLDER NAME" value={folderName} onChange={e => setFolderName(e.target.value)} required />
-                                <input type="password" className={`${BORDER} p-3 font-bold uppercase text-sm outline-none`} placeholder="PASSWORD" value={password} onChange={e => setPassword(e.target.value)} required />
-                                {error && <p className="text-red-500 text-[10px] font-black uppercase">{error}</p>}
-                                <button className={`bg-blue-600 text-white ${BORDER} ${SHADOW_SMALL} ${ACTIVE} py-4 font-black mt-2 uppercase`}>
-                                    {loading ? 'PROCESSING...' : 'EXECUTE'}
-                                </button>
-                                <button type="button" onClick={() => setView('landing')} className="text-xs font-bold uppercase underline mt-2">Go Back</button>
-                            </form>
-                        )}
-                    </div>
-                </div>
-            );
-        }
-
-       const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<OpenVault />);
-
-        // human note: this ensures icons load even after react renders
-        setTimeout(() => {
-            if (window.lucide) {
-                lucide.createIcons();
-            }
-        }, 500);
-    </script>
-</body>
-</html>
+// export these to be used by our react ui
+window.VaultEngine = {
+    client: supabaseClient,
+    hash: generateHash,
+    storageUrl: `${SUPABASE_URL}/storage/v1/object/public/vaults/`
+};
