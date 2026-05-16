@@ -12,13 +12,12 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
-        body { font-family: 'JetBrains Mono', monospace; background-color: #0c0c0c; color: #cccccc; margin: 0; }
-        .win-blur { background: rgba(30, 30, 30, 0.8); backdrop-filter: blur(10px); }
-        .win-border { border: 1px solid #3e3e3e; }
-        .win-btn { background: #2b2b2b; border: 1px solid #3e3e3e; transition: all 0.2s; }
-        .win-btn:hover { background: #353535; border-color: #0078d4; }
-        .win-input { background: #1e1e1e; border: 1px solid #3e3e3e; border-bottom: 2px solid #3e3e3e; transition: border-color 0.2s; color: white; }
-        .win-input:focus { border-bottom-color: #0078d4; outline: none; }
+        body { font-family: 'JetBrains Mono', monospace; margin: 0; transition: background-color 0.2s, color 0.2s; }
+        .win-border { border: 1px solid var(--border-color, #3e3e3e); }
+        .win-btn { background: var(--btn-bg, #2b2b2b); border: 1px solid var(--border-color, #3e3e3e); color: var(--text-color); transition: all 0.2s; }
+        .win-btn:hover { background: var(--btn-hover, #353535); border-color: var(--accent-color, #0078d4); }
+        .win-input { background: var(--input-bg, #1e1e1e); border: 1px solid var(--border-color, #3e3e3e); border-bottom: 2px solid var(--border-color, #3e3e3e); transition: border-color 0.2s; color: var(--text-white); }
+        .win-input:focus { border-bottom-color: var(--accent-color, #0078d4); outline: none; }
     </style>
 </head>
 <body>
@@ -26,10 +25,20 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // replace these with your actual keys
+        // database endpoints configuration
         const SUPABASE_URL = 'https://jkqayyoyrzmrscqjkeqr.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImprcWF5eW95cnptcnNjcWprZXFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc2MTE3MjYsImV4cCI6MjA5MzE4NzcyNn0.IEsgMQsD5Sq4heWsmafHowKLh1KfXU___DcPBDATv38';
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // palette definition arrays mapping tailwind and hex values
+        const THEMES = {
+            'ov-dark': { name: 'OpenVault Dark', bg: 'bg-[#0c0c0c]', panel: 'bg-[rgba(30,30,30,0.8)] backdrop-blur-[10px]', text: 'text-[#cccccc]', title: 'text-white', border: '#3e3e3e', btn: '#2b2b2b', hover: '#353535', input: '#1e1e1e', accent: '#0078d4', inputTxt: 'white' },
+            'ov-light': { name: 'OpenVault Light', bg: 'bg-[#f3f3f3]', panel: 'bg-white', text: 'text-[#444444]', title: 'text-black', border: '#cccccc', btn: '#e1e1e1', hover: '#d5d5d5', input: '#ffffff', accent: '#0078d4', inputTxt: 'black' },
+            'ct-latte': { name: 'Catppuccin Latte', bg: 'bg-[#eff1f5]', panel: 'bg-[#e6e9ef]', text: 'text-[#4c4f69]', title: 'text-[#d20f39]', border: '#ccd0da', btn: '#ccd0da', hover: '#bcc0cc', input: '#fff', accent: '#1e66f5', inputTxt: '#4c4f69' },
+            'ct-frappe': { name: 'Catppuccin Frappé', bg: 'bg-[#303446]', panel: 'bg-[#292c3c]', text: 'text-[#c6d0f5]', title: 'text-[#e5c890]', border: '#414559', btn: '#414559', hover: '#51576d', input: '#232634', accent: '#8caaee', inputTxt: '#c6d0f5' },
+            'ct-macchiato': { name: 'Catppuccin Macchiato', bg: 'bg-[#24273a]', panel: 'bg-[#1e2030]', text: 'text-[#cad3f5]', title: 'text-[#eed49f]', border: '#36394e', btn: '#36394e', hover: '#494d64', input: '#181926', accent: '#8aadf4', inputTxt: '#cad3f5' },
+            'ct-mocha': { name: 'Catppuccin Mocha', bg: 'bg-[#1e1e2e]', panel: 'bg-[#181825]', text: 'text-[#cdd6f4]', title: 'text-[#f9e2af]', border: '#313244', btn: '#313244', hover: '#45475a', input: '#11111b', accent: '#89b4fa', inputTxt: '#cdd6f4' }
+        };
 
         function App() {
             const [view, setView] = useState('home');
@@ -37,6 +46,34 @@
             const [vault, setVault] = useState(null);
             const [files, setFiles] = useState([]);
             const [form, setForm] = useState({ name: '', pass: '' });
+            const [showSettings, setShowSettings] = useState(false);
+            
+            // fetch user profile data structures on launch
+            const [settings, setSettings] = useState(() => {
+                const saved = localStorage.getItem('openvault_settings');
+                return saved ? JSON.parse(saved) : { theme: 'ov-dark', alias: '', useAlias: false };
+            });
+
+            const currentTheme = THEMES[settings.theme] || THEMES['ov-dark'];
+
+            // pass native variables through document style properties
+            useEffect(() => {
+                const root = document.documentElement;
+                root.style.setProperty('--border-color', currentTheme.border);
+                root.style.setProperty('--btn-bg', currentTheme.btn);
+                root.style.setProperty('--btn-hover', currentTheme.hover);
+                root.style.setProperty('--input-bg', currentTheme.input);
+                root.style.setProperty('--accent-color', currentTheme.accent);
+                root.style.setProperty('--text-color', currentTheme.text);
+                root.style.setProperty('--text-white', currentTheme.inputTxt);
+                lucide.createIcons();
+            }, [settings.theme, view, showSettings]);
+
+            const updateSetting = (key, value) => {
+                const updated = { ...settings, [key]: value };
+                setSettings(updated);
+                localStorage.setItem('openvault_settings', JSON.stringify(updated));
+            };
 
             const getHash = async (text) => {
                 const msgUint8 = new TextEncoder().encode(text.toLowerCase().trim());
@@ -90,9 +127,7 @@
                 if (check !== vault.name) return;
 
                 setLoading(true);
-                // delete from db
                 await supabaseClient.from('folders').delete().eq('folder_hash', vault.id);
-                // clear storage
                 if (files.length > 0) {
                     const paths = files.map(f => `${vault.id}/${f.name}`);
                     await supabaseClient.storage.from('vaults').remove(paths);
@@ -101,11 +136,11 @@
             };
 
             if (view === 'inside') return (
-                <div className="min-h-screen p-6 md:p-12">
+                <div className={`min-h-screen p-6 md:p-12 ${currentTheme.bg} ${currentTheme.text}`}>
                     <div className="max-w-4xl mx-auto">
-                        <header className="win-blur win-border p-6 mb-8 flex justify-between items-center">
+                        <header className={`${currentTheme.panel} win-border p-6 mb-8 flex justify-between items-center`}>
                             <div>
-                                <h2 className="text-white font-bold text-xl">{vault.name}</h2>
+                                <h2 className={`font-bold text-xl ${currentTheme.title}`}>{vault.name}</h2>
                                 <p className="text-[10px] opacity-50 uppercase tracking-widest mt-1">Status: Secured</p>
                             </div>
                             <div className="flex gap-2">
@@ -120,9 +155,9 @@
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {files.map(f => (
-                                <div key={f.name} className="win-blur win-border p-4 flex items-center justify-between group">
+                                <div key={f.name} className={`${currentTheme.panel} win-border p-4 flex items-center justify-between group`}>
                                     <div className="flex items-center gap-3 overflow-hidden">
-                                        <i data-lucide="file" size="18" className="text-[#0078d4] shrink-0"></i>
+                                        <i data-lucide="file" size="18" style={{color: currentTheme.accent}} className="shrink-0"></i>
                                         <span className="text-sm truncate">{f.name}</span>
                                     </div>
                                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -141,18 +176,31 @@
             );
 
             return (
-                <div className="min-h-screen flex items-center justify-center p-6 bg-[#050505]">
-                    <div className="win-blur win-border p-10 w-full max-w-sm">
-                        <div className="flex items-center gap-3 mb-10">
-                            <div className="w-10 h-10 bg-[#0078d4] flex items-center justify-center">
-                                <i data-lucide="lock" className="text-white" size="20"></i>
+                <div className={`min-h-screen flex flex-col items-center justify-center p-6 ${currentTheme.bg} ${currentTheme.text}`}>
+                    
+                    {/* dynamic conditional user profile welcome notification banner */}
+                    {settings.useAlias && settings.alias.trim() && (
+                        <div className="mb-4 text-sm font-bold opacity-80 tracking-wide text-center uppercase animate-fade-in">
+                            Welcome back, <span style={{color: currentTheme.accent}}>{settings.alias}</span>
+                        </div>
+                    )}
+
+                    <div className={`${currentTheme.panel} win-border p-10 w-full max-w-sm relative`}>
+                        <div className="flex justify-between items-center mb-10">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 flex items-center justify-center" style={{backgroundColor: currentTheme.accent}}>
+                                    <i data-lucide="lock" className="text-white" size="20"></i>
+                                </div>
+                                <h1 className={`text-2xl font-bold tracking-tight ${currentTheme.title}`}>OpenVault</h1>
                             </div>
-                            <h1 className="text-2xl font-bold text-white tracking-tight">OpenVault</h1>
+                            <button onClick={() => setShowSettings(true)} className="opacity-60 hover:opacity-100 transition-opacity">
+                                <i data-lucide="settings" size="20"></i>
+                            </button>
                         </div>
 
                         {view === 'home' ? (
                             <div className="space-y-4">
-                                <button onClick={() => setView('login')} className="win-btn w-full p-4 text-sm text-white font-bold">Log In</button>
+                                <button onClick={() => setView('login')} className="win-btn w-full p-4 text-sm font-bold">Log In</button>
                                 <button onClick={() => setView('setup')} className="win-btn w-full p-4 text-sm opacity-60">Create New Vault</button>
                             </div>
                         ) : (
@@ -165,20 +213,57 @@
                                     <label className="text-[10px] uppercase opacity-50 block mb-1">Password</label>
                                     <input type="password" className="win-input w-full p-3 text-sm" placeholder="••••••••" onChange={e => setForm({...form, pass: e.target.value})} required />
                                 </div>
-                                <button type="submit" className="win-btn w-full p-4 text-sm text-white bg-[#0078d4] border-none font-bold">
+                                <button type="submit" className="win-btn w-full p-4 text-sm text-white border-none font-bold" style={{backgroundColor: currentTheme.accent}}>
                                     {loading ? 'Working...' : (view === 'setup' ? 'Create' : 'Log In')}
                                 </button>
                                 <button type="button" onClick={() => setView('home')} className="w-full text-[10px] uppercase opacity-40 hover:opacity-100 transition-opacity">Go Back</button>
                             </form>
                         )}
                     </div>
+
+                    {/* interactive theme configuration sheet */}
+                    {showSettings && (
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                            <div className={`${currentTheme.panel} win-border p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto`}>
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className={`font-bold ${currentTheme.title}`}>Settings</h2>
+                                    <button onClick={() => setShowSettings(false)}><i data-lucide="x" size="18"></i></button>
+                                </div>
+
+                                <div className="space-y-6 text-sm">
+                                    <div>
+                                        <label className="block text-[10px] uppercase opacity-50 mb-3">Themes</label>
+                                        <div className="grid grid-cols-1 gap-2">
+                                            {Object.keys(THEMES).map(key => (
+                                                <button key={key} onClick={() => updateSetting('theme', key)} 
+                                                    className={`p-3 text-left border text-xs flex justify-between items-center ${settings.theme === key ? 'border-blue-500 bg-blue-500/10 font-bold' : 'border-transparent bg-black/10'}`}>
+                                                    {THEMES[key].name}
+                                                    {settings.theme === key && <i data-lucide="check" size="14"></i>}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="border-t pt-4" style={{borderColor: currentTheme.border}}>
+                                        <label className="block text-[10px] uppercase opacity-50 mb-2">User Profile Alias</label>
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <input type="checkbox" id="useAlias" checked={settings.useAlias} onChange={(e) => updateSetting('useAlias', e.target.checked)} className="accent-blue-500 h-4 w-4" />
+                                            <label htmlFor="useAlias" className="text-xs select-none">Show Welcome Text</label>
+                                        </div>
+                                        <input className="win-input w-full p-2 text-xs" placeholder="Your Name" value={settings.alias} onChange={(e) => updateSetting('alias', e.target.value)} disabled={!settings.useAlias} />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                 </div>
             );
         }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
-        setInterval(() => lucide.createIcons(), 1000); // keep icons fresh
+        setTimeout(() => lucide.createIcons(), 500);
     </script>
 </body>
 </html>
