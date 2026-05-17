@@ -14,25 +14,17 @@
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
         body { font-family: 'JetBrains Mono', monospace; margin: 0; overflow-x: hidden; }
         .win-border { border: 1px solid var(--border-color, #3e3e3e); }
-        .win-btn { background: var(--btn-bg, #2b2b2b); border: 1px solid var(--border-color, #3e3e3e); color: var(--text-color); transition: all 0.2s; }
+        .win-btn { background: var(--btn-bg, #2b2b2b); border: 1px solid var(--border-color, #3e3e3e); color: var(--text-color) !important; transition: all 0.2s; }
         .win-btn:hover { background: var(--btn-hover, #353535); border-color: var(--accent-color, #0078d4); }
-        .win-input { background: var(--input-bg, #1e1e1e); border: 1px solid var(--border-color, #3e3e3e); border-bottom: 2px solid var(--border-color, #3e3e3e); transition: border-color 0.2s; color: var(--text-white); }
+        .win-input { background: var(--input-bg, #1e1e1e); border: 1px solid var(--border-color, #3e3e3e); border-bottom: 2px solid var(--border-color, #3e3e3e); transition: border-color 0.2s; color: var(--input-text-color) !important; }
         .win-input:focus { border-bottom-color: var(--accent-color, #0078d4); outline: none; }
         
-        /* background layout layers */
         .wallpaper-bg {
             position: fixed;
             inset: 0;
             z-index: -2;
             background-size: cover;
             background-position: center;
-            transition: filter 0.2s, background-image 0.3s;
-        }
-        .acrylic-overlay {
-            position: fixed;
-            inset: 0;
-            z-index: -1;
-            transition: backdrop-filter 0.2s, background-color 0.2s;
         }
     </style>
 </head>
@@ -46,12 +38,12 @@
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         const THEMES = {
-            'ov-dark': { name: 'OpenVault Dark', bg: '#0c0c0c', panel: 'rgba(30,30,30,0.75)', text: 'text-[#cccccc]', title: 'text-white', border: '#3e3e3e', btn: '#2b2b2b', hover: '#353535', input: '#1e1e1e', accent: '#0078d4', inputTxt: 'white' },
-            'ov-light': { name: 'OpenVault Light', bg: '#f3f3f3', panel: 'rgba(255,255,255,0.75)', text: 'text-[#444444]', title: 'text-black', border: '#cccccc', btn: '#e1e1e1', hover: '#d5d5d5', input: '#ffffff', accent: '#0078d4', inputTxt: 'black' },
-            'ct-latte': { name: 'Catppuccin Latte', bg: '#eff1f5', panel: 'rgba(230,233,239,0.75)', text: 'text-[#4c4f69]', title: 'text-[#d20f39]', border: '#ccd0da', btn: '#ccd0da', hover: '#bcc0cc', input: '#fff', accent: '#1e66f5', inputTxt: '#4c4f69' },
-            'ct-frappe': { name: 'Catppuccin Frappé', bg: '#303446', panel: 'rgba(41,44,60,0.75)', text: 'text-[#c6d0f5]', title: 'text-[#e5c890]', border: '#414559', btn: '#414559', hover: '#51576d', input: '#232634', accent: '#8caaee', inputTxt: '#c6d0f5' },
-            'ct-macchiato': { name: 'Catppuccin Macchiato', bg: '#24273a', panel: 'rgba(30,32,48,0.75)', text: 'text-[#cad3f5]', title: 'text-[#eed49f]', border: '#36394e', btn: '#36394e', hover: '#494d64', input: '#181926', accent: '#8aadf4', inputTxt: '#cad3f5' },
-            'ct-mocha': { name: 'Catppuccin Mocha', bg: '#1e1e2e', panel: 'rgba(24,24,37,0.75)', text: 'text-[#cdd6f4]', title: 'text-[#f9e2af]', border: '#313244', btn: '#313244', hover: '#45475a', input: '#11111b', accent: '#89b4fa', inputTxt: '#cdd6f4' }
+            'ov-dark': { name: 'OpenVault Dark', bg: '#0c0c0c', panel: '#121212', text: '#cccccc', title: '#ffffff', border: '#3e3e3e', btn: '#2b2b2b', hover: '#353535', input: '#1e1e1e', accent: '#0078d4', inputTxt: '#ffffff' },
+            'ov-light': { name: 'OpenVault Light', bg: '#f3f3f3', panel: '#ffffff', text: '#444444', title: '#111111', border: '#cccccc', btn: '#e1e1e1', hover: '#d5d5d5', input: '#f9f9f9', accent: '#0078d4', inputTxt: '#111111' },
+            'ct-latte': { name: 'Catppuccin Latte', bg: '#eff1f5', panel: '#e6e9ef', text: '#4c4f69', title: '#d20f39', border: '#ccd0da', btn: '#ccd0da', hover: '#bcc0cc', input: '#ffffff', accent: '#1e66f5', inputTxt: '#4c4f69' },
+            'ct-frappe': { name: 'Catppuccin Frappé', bg: '#303446', panel: '#292c3c', text: '#c6d0f5', title: '#e5c890', border: '#414559', btn: '#414559', hover: '#51576d', input: '#232634', accent: '#8caaee', inputTxt: '#c6d0f5' },
+            'ct-macchiato': { name: 'Catppuccin Macchiato', bg: '#24273a', panel: '#1e2030', text: '#cad3f5', title: '#eed49f', border: '#36394e', btn: '#36394e', hover: '#494d64', input: '#181926', accent: '#8aadf4', inputTxt: '#cad3f5' },
+            'ct-mocha': { name: 'Catppuccin Mocha', bg: '#1e1e2e', panel: '#181825', text: '#cdd6f4', title: '#f9e2af', border: '#313244', btn: '#313244', hover: '#45475a', input: '#11111b', accent: '#89b4fa', inputTxt: '#cdd6f4' }
         };
 
         const SPOTLIGHT_WALLPAPERS = [
@@ -75,7 +67,7 @@
                 return saved ? JSON.parse(saved) : { 
                     theme: 'ov-dark', alias: '', useAlias: false,
                     wallpaperType: 'spotlight', spotlightIndex: 0, customWallpaperUrl: '',
-                    brightness: 100, blur: 10
+                    brightness: 100
                 };
             });
 
@@ -89,7 +81,7 @@
                 root.style.setProperty('--input-bg', currentTheme.input);
                 root.style.setProperty('--accent-color', currentTheme.accent);
                 root.style.setProperty('--text-color', currentTheme.text);
-                root.style.setProperty('--text-white', currentTheme.inputTxt);
+                root.style.setProperty('--input-text-color', currentTheme.inputTxt);
                 lucide.createIcons();
             }, [settings.theme, view, showSettings, files]);
 
@@ -111,7 +103,6 @@
                 reader.readAsDataURL(file);
             };
 
-            // helper logic to switch lucide icons based on extensions
             const getFileIcon = (fileName) => {
                 const ext = fileName.split('.').pop().toLowerCase();
                 if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(ext)) return 'image';
@@ -183,31 +174,25 @@
                 window.location.reload();
             };
 
-            // compute background style
             const wallpaperUrl = settings.wallpaperType === 'custom' 
                 ? settings.customWallpaperUrl 
                 : (SPOTLIGHT_WALLPAPERS[settings.spotlightIndex]?.url || '');
 
             return (
-                <div className="min-h-screen relative flex flex-col items-center justify-center p-6">
+                <div className="min-h-screen relative flex flex-col items-center justify-center p-6" style={{ color: currentTheme.text }}>
                     
-                    {/* dynamic desktop background rendering layers */}
                     <div className="wallpaper-bg" style={{ 
                         backgroundImage: wallpaperUrl ? `url(${wallpaperUrl})` : 'none',
                         backgroundColor: currentTheme.bg,
                         filter: `brightness(${settings.brightness}%)`
                     }}></div>
-                    <div className="acrylic-overlay" style={{ 
-                        backdropFilter: `blur(${settings.blur}px)`,
-                        backgroundColor: wallpaperUrl ? 'transparent' : currentTheme.bg
-                    }}></div>
 
                     {view === 'inside' ? (
-                        <div className={`w-full max-w-4xl ${currentTheme.text} my-auto`}>
+                        <div className="w-full max-w-4xl my-auto">
                             <header className="win-border p-6 mb-8 flex justify-between items-center" style={{ backgroundColor: currentTheme.panel }}>
                                 <div>
-                                    <h2 className={`font-bold text-xl ${currentTheme.title}`}>{vault.name}</h2>
-                                    <p className="text-[10px] opacity-50 uppercase tracking-widest mt-1">Status: Secured</p>
+                                    <h2 className="font-bold text-xl" style={{ color: currentTheme.title }}>{vault.name}</h2>
+                                    <p className="text-[10px] opacity-50 uppercase tracking-widest mt-1" style={{ color: currentTheme.text }}>Status: Secured</p>
                                 </div>
                                 <div className="flex gap-2">
                                     <label className="win-btn px-4 py-2 text-xs font-bold cursor-pointer flex items-center gap-2">
@@ -225,10 +210,10 @@
                                     <div key={f.name} className="win-border p-4 flex items-center justify-between group" style={{ backgroundColor: currentTheme.panel }}>
                                         <div className="flex items-center gap-3 overflow-hidden">
                                             <i data-lucide={getFileIcon(f.name)} size="18" style={{color: currentTheme.accent}} className="shrink-0"></i>
-                                            <span className="text-sm truncate">{f.name}</span>
+                                            <span className="text-sm truncate" style={{ color: currentTheme.title }}>{f.name}</span>
                                         </div>
-                                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <a href={`${SUPABASE_URL}/storage/v1/object/public/vaults/${vault.id}/${f.name}`} download className="p-1 hover:text-white">
+                                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: currentTheme.text }}>
+                                            <a href={`${SUPABASE_URL}/storage/v1/object/public/vaults/${vault.id}/${f.name}`} download className="p-1 hover:opacity-80">
                                                 <i data-lucide="download" size="18"></i>
                                             </a>
                                             <button onClick={() => deleteFile(f.name)} className="p-1 hover:text-red-500">
@@ -253,9 +238,9 @@
                                         <div className="w-10 h-10 flex items-center justify-center" style={{backgroundColor: currentTheme.accent}}>
                                             <i data-lucide="lock" className="text-white" size="20"></i>
                                         </div>
-                                        <h1 className={`text-2xl font-bold tracking-tight ${currentTheme.title}`}>OpenVault</h1>
+                                        <h1 className="text-2xl font-bold tracking-tight" style={{ color: currentTheme.title }}>OpenVault</h1>
                                     </div>
-                                    <button onClick={() => setShowSettings(true)} className="opacity-60 hover:opacity-100 transition-opacity">
+                                    <button onClick={() => setShowSettings(true)} className="opacity-60 hover:opacity-100 transition-opacity" style={{ color: currentTheme.text }}>
                                         <i data-lucide="settings" size="20"></i>
                                     </button>
                                 </div>
@@ -268,50 +253,48 @@
                                 ) : (
                                     <form onSubmit={(e) => handleEntry(e, view === 'setup' ? 'create' : 'login')} className="space-y-5">
                                         <div>
-                                            <label className="text-[10px] uppercase opacity-50 block mb-1">Vault Name</label>
+                                            <label className="text-[10px] uppercase opacity-50 block mb-1" style={{ color: currentTheme.text }}>Vault Name</label>
                                             <input className="win-input w-full p-3 text-sm" placeholder="Enter name" onChange={e => setForm({...form, name: e.target.value})} required />
                                         </div>
                                         <div>
-                                            <label className="text-[10px] uppercase opacity-50 block mb-1">Password</label>
+                                            <label className="text-[10px] uppercase opacity-50 block mb-1" style={{ color: currentTheme.text }}>Password</label>
                                             <input type="password" className="win-input w-full p-3 text-sm" placeholder="••••••••" onChange={e => setForm({...form, pass: e.target.value})} required />
                                         </div>
                                         <button type="submit" className="win-btn w-full p-4 text-sm text-white border-none font-bold" style={{backgroundColor: currentTheme.accent}}>
                                             {loading ? 'Working...' : (view === 'setup' ? 'Create' : 'Log In')}
                                         </button>
-                                        <button type="button" onClick={() => setView('home')} className="w-full text-[10px] uppercase opacity-40 hover:opacity-100 transition-opacity">Go Back</button>
+                                        <button type="button" onClick={() => setView('home')} className="w-full text-[10px] uppercase opacity-40 hover:opacity-100 transition-opacity text-center block mt-2" style={{ color: currentTheme.text }}>Go Back</button>
                                     </form>
                                 )}
                             </div>
                         </div>
                     )}
 
-                    {/* expansion custom windows 10 settings drawer flyout sheet */}
                     {showSettings && (
                         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
                             <div className="win-border p-6 w-full max-w-md max-h-[85vh] overflow-y-auto" style={{ backgroundColor: currentTheme.panel, color: currentTheme.text }}>
                                 <div className="flex justify-between items-center mb-6 border-b pb-2" style={{borderColor: currentTheme.border}}>
-                                    <h2 className={`font-bold text-lg ${currentTheme.title}`}>Personalization Settings</h2>
-                                    <button onClick={() => setShowSettings(false)}><i data-lucide="x" size="18"></i></button>
+                                    <h2 className="font-bold text-lg" style={{ color: currentTheme.title }}>Personalization Settings</h2>
+                                    <button onClick={() => setShowSettings(false)} style={{ color: currentTheme.text }}><i data-lucide="x" size="18"></i></button>
                                 </div>
 
                                 <div className="space-y-6 text-sm">
-                                    {/* identity alias setting engine configuration */}
                                     <div>
-                                        <label className="block text-[10px] uppercase opacity-50 mb-2 font-bold tracking-wider">User Account Profile</label>
+                                        <label className="block text-[10px] uppercase opacity-50 mb-2 font-bold tracking-wider" style={{ color: currentTheme.text }}>User Account Profile</label>
                                         <div className="flex items-center gap-2 mb-2">
                                             <input type="checkbox" id="useAlias" checked={settings.useAlias} onChange={(e) => updateSetting('useAlias', e.target.checked)} className="h-4 w-4" />
-                                            <label htmlFor="useAlias" className="text-xs select-none">Enable System Greeting Banner</label>
+                                            <label htmlFor="useAlias" className="text-xs select-none" style={{ color: currentTheme.title }}>Enable System Greeting Banner</label>
                                         </div>
                                         <input className="win-input w-full p-2 text-xs" placeholder="e.g. BlackPC" value={settings.alias} onChange={(e) => updateSetting('alias', e.target.value)} disabled={!settings.useAlias} />
                                     </div>
 
-                                    {/* core system application styling palettes block theme matrix configuration */}
                                     <div>
-                                        <label className="block text-[10px] uppercase opacity-50 mb-2 font-bold tracking-wider">Interface Theme Base</label>
+                                        <label className="block text-[10px] uppercase opacity-50 mb-2 font-bold tracking-wider" style={{ color: currentTheme.text }}>Interface Theme Base</label>
                                         <div className="grid grid-cols-2 gap-1.5">
                                             {Object.keys(THEMES).map(key => (
                                                 <button key={key} onClick={() => updateSetting('theme', key)} 
-                                                    className={`p-2.5 text-left border text-xs flex justify-between items-center transition-all ${settings.theme === key ? 'border-blue-500 bg-blue-500/10 font-bold' : 'border-transparent bg-black/10 hover:bg-black/20'}`}>
+                                                    className={`p-2.5 text-left border text-xs flex justify-between items-center transition-all ${settings.theme === key ? 'border-blue-500 bg-blue-500/10 font-bold' : 'border-transparent bg-black/5 hover:bg-black/10'}`}
+                                                    style={{ color: currentTheme.title }}>
                                                     <span className="truncate">{THEMES[key].name}</span>
                                                     {settings.theme === key && <i data-lucide="check" size="12" className="shrink-0 ml-1"></i>}
                                                 </button>
@@ -319,13 +302,12 @@
                                         </div>
                                     </div>
 
-                                    {/* dynamic wallpaper personalization configuration array selection structure */}
                                     <div className="border-t pt-4" style={{borderColor: currentTheme.border}}>
-                                        <label className="block text-[10px] uppercase opacity-50 mb-2 font-bold tracking-wider">Desktop Wallpaper Background</label>
+                                        <label className="block text-[10px] uppercase opacity-50 mb-2 font-bold tracking-wider" style={{ color: currentTheme.text }}>Desktop Wallpaper Background</label>
                                         
                                         <div className="space-y-3">
                                             <div>
-                                                <label className="block text-[11px] opacity-60 mb-1">Select Spotlight Scene</label>
+                                                <label className="block text-[11px] opacity-60 mb-1" style={{ color: currentTheme.text }}>Select Spotlight Scene</label>
                                                 <select value={settings.wallpaperType === 'spotlight' ? settings.spotlightIndex : 'custom'} 
                                                     onChange={(e) => {
                                                         if (e.target.value === 'custom') {
@@ -336,11 +318,11 @@
                                                             localStorage.setItem('openvault_settings', JSON.stringify(updated));
                                                         }
                                                     }}
-                                                    className="w-full p-2 text-xs win-input outline-none">
+                                                    className="w-full p-2 text-xs win-input outline-none text-black">
                                                     {SPOTLIGHT_WALLPAPERS.map((wall, idx) => (
-                                                        <option key={idx} value={idx} className="text-black">{wall.name}</option>
+                                                        <option key={idx} value={idx}>{wall.name}</option>
                                                     ))}
-                                                    {settings.customWallpaperUrl && <option value="custom" className="text-black">My Uploaded Wallpaper</option>}
+                                                    {settings.customWallpaperUrl && <option value="custom">My Uploaded Wallpaper</option>}
                                                 </select>
                                             </div>
 
@@ -353,22 +335,13 @@
                                         </div>
                                     </div>
 
-                                    {/* fine-grain texture layout matrix filtering sliders controls structures */}
                                     <div className="border-t pt-4 space-y-4" style={{borderColor: currentTheme.border}}>
                                         <div>
                                             <div className="flex justify-between text-xs mb-1">
-                                                <label className="opacity-60">Wallpaper Brightness</label>
-                                                <span>{settings.brightness}%</span>
+                                                <label className="opacity-60" style={{ color: currentTheme.text }}>Wallpaper Brightness</label>
+                                                <span style={{ color: currentTheme.title }}>{settings.brightness}%</span>
                                             </div>
                                             <input type="range" min="20" max="100" value={settings.brightness} onChange={(e) => updateSetting('brightness', parseInt(e.target.value))} className="w-full accent-blue-500 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
-                                        </div>
-
-                                        <div>
-                                            <div className="flex justify-between text-xs mb-1">
-                                                <label className="opacity-60">Panel Transparency Blur (Acrylic)</label>
-                                                <span>{settings.blur}px</span>
-                                            </div>
-                                            <input type="range" min="0" max="25" value={settings.blur} onChange={(e) => updateSetting('blur', parseInt(e.target.value))} className="w-full accent-blue-500 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
                                         </div>
                                     </div>
                                 </div>
