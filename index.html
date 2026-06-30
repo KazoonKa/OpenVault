@@ -62,6 +62,9 @@
             const [form, setForm] = useState({ name: '', pass: '' });
             const [showSettings, setShowSettings] = useState(false);
             
+            // supabase server tracking state
+            const [dbStatus, setDbStatus] = useState('checking'); // 'online' | 'offline' | 'checking'
+            
             const [settings, setSettings] = useState(() => {
                 const saved = localStorage.getItem('openvault_settings');
                 return saved ? JSON.parse(saved) : { 
@@ -73,6 +76,25 @@
 
             const currentTheme = THEMES[settings.theme] || THEMES['ov-dark'];
 
+            // ping supabase node to check cluster health
+            const checkSupabaseHealth = async () => {
+                try {
+                    // human note: run a lightweight limit-1 request to verify table status
+                    const { error } = await supabaseClient.from('folders').select('folder_hash').limit(1);
+                    if (error) throw error;
+                    setDbStatus('online');
+                } catch (err) {
+                    setDbStatus('offline');
+                }
+            };
+
+            useEffect(() => {
+                checkSupabaseHealth();
+                // re-verify connection every 15 seconds
+                const interval = setInterval(checkSupabaseHealth, 15000);
+                return () => clearInterval(interval);
+            }, []);
+
             useEffect(() => {
                 const root = document.documentElement;
                 root.style.setProperty('--border-color', currentTheme.border);
@@ -83,7 +105,7 @@
                 root.style.setProperty('--text-color', currentTheme.text);
                 root.style.setProperty('--input-text-color', currentTheme.inputTxt);
                 lucide.createIcons();
-            }, [settings.theme, view, showSettings, files]);
+            }, [settings.theme, view, showSettings, files, dbStatus]);
 
             const updateSetting = (key, value) => {
                 const updated = { ...settings, [key]: value };
@@ -121,12 +143,17 @@
             };
 
             const refreshFiles = async (id) => {
+                if (dbStatus !== 'online') return;
                 const { data } = await supabaseClient.storage.from('vaults').list(id);
                 setFiles(data || []);
             };
 
             const handleEntry = async (e, mode) => {
                 e.preventDefault();
+                if (dbStatus !== 'online') {
+                    alert("Cannot establish vault session. Supabase cluster is unreachable.");
+                    return;
+                }
                 setLoading(true);
                 const id = await getHash(form.name);
                 const pHash = await getHash(form.pass);
@@ -145,6 +172,7 @@
             };
 
             const uploadFile = async (e) => {
+                if (dbStatus !== 'online') return;
                 const file = e.target.files[0];
                 if (!file) return;
                 setLoading(true);
@@ -154,6 +182,7 @@
             };
 
             const deleteFile = async (fileName) => {
+                if (dbStatus !== 'online') return;
                 if (!confirm(`Delete "${fileName}"?`)) return;
                 setLoading(true);
                 await supabaseClient.storage.from('vaults').remove([`${vault.id}/${fileName}`]);
@@ -162,6 +191,7 @@
             };
 
             const deleteVault = async () => {
+                if (dbStatus !== 'online') return;
                 const check = prompt(`To delete this vault, type the vault name ("${vault.name}") below:`);
                 if (check !== vault.name) return;
 
@@ -191,19 +221,42 @@
                         <div className="w-full max-w-4xl my-auto">
                             <header className="win-border p-6 mb-8 flex justify-between items-center" style={{ backgroundColor: currentTheme.panel }}>
                                 <div>
-                                    <h2 className="font-bold text-xl" style={{ color: currentTheme.title }}>{vault.name}</h2>
-                                    <p className="text-[10px] opacity-50 uppercase tracking-widest mt-1" style={{ color: currentTheme.text }}>Status: Secured</p>
+                                    <div className="flex items-center gap-3">
+                                        <h2 className="font-bold text-xl" style={{ color: currentTheme.title }}>{vault.name}</h2>
+                                        
+                                        {/* database engine network status layout indicator badge */}
+                                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-sm select-none transition-all ${
+                                            dbStatus === 'online' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 
+                                            dbStatus === 'offline' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 
+                                            'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
+                                        }`}>
+                                            <span className={`w-1.5 h-1.5 rounded-full ${
+                                                dbStatus === 'online' ? 'bg-green-400 animate-pulse' : 
+                                                dbStatus === 'offline' ? 'bg-red-400' : 'bg-yellow-400 animate-spin'
+                                            }`}></span>
+                                            Supabase: {dbStatus}
+                                        </span>
+                                    </div>
+                                    <p className="text-[10px] opacity-50 uppercase tracking-widest mt-1" style={{ color: currentTheme.text }}>
+                                        {dbStatus === 'online' ? 'Database Cluster Operational' : 'Database Cluster Error / Disconnected'}
+                                    </p>
                                 </div>
                                 <div className="flex gap-2">
-                                    <label className="win-btn px-4 py-2 text-xs font-bold cursor-pointer flex items-center gap-2">
+                                    <label className={`win-btn px-4 py-2 text-xs font-bold flex items-center gap-2 ${dbStatus !== 'online' ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
                                         <i data-lucide="upload" size="14"></i> Upload
-                                        <input type="file" className="hidden" onChange={uploadFile} />
+                                        <input type="file" className="hidden" onChange={uploadFile} disabled={dbStatus !== 'online'} />
                                     </label>
                                     <button onClick={() => setShowSettings(true)} className="win-btn px-3 py-2"><i data-lucide="settings" size="14"></i></button>
-                                    <button onClick={deleteVault} className="win-btn px-4 py-2 text-xs font-bold text-red-400 hover:border-red-500">Delete Vault</button>
+                                    <button onClick={deleteVault} disabled={dbStatus !== 'online'} className={`win-btn px-4 py-2 text-xs font-bold text-red-400 hover:border-red-500 ${dbStatus !== 'online' ? 'opacity-40 cursor-not-allowed' : ''}`}>Delete Vault</button>
                                     <button onClick={() => window.location.reload()} className="win-btn px-4 py-2 text-xs font-bold">Log Out</button>
                                 </div>
                             </header>
+
+                            {dbStatus === 'offline' && (
+                                <div className="win-border p-3 mb-4 text-xs font-bold bg-red-500/10 border-red-500/30 text-red-400 text-center flex items-center justify-center gap-2">
+                                    <i data-lucide="database-zap" size="14"></i> Supabase backend lost connection. Cloud write/delete actions are locked down.
+                                </div>
+                            )}
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 {files.map(f => (
@@ -213,10 +266,14 @@
                                             <span className="text-sm truncate" style={{ color: currentTheme.title }}>{f.name}</span>
                                         </div>
                                         <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: currentTheme.text }}>
-                                            <a href={`${SUPABASE_URL}/storage/v1/object/public/vaults/${vault.id}/${f.name}`} download className="p-1 hover:opacity-80">
-                                                <i data-lucide="download" size="18"></i>
-                                            </a>
-                                            <button onClick={() => deleteFile(f.name)} className="p-1 hover:text-red-500">
+                                            {dbStatus === 'online' ? (
+                                                <a href={`${SUPABASE_URL}/storage/v1/object/public/vaults/${vault.id}/${f.name}`} download className="p-1 hover:opacity-80">
+                                                    <i data-lucide="download" size="18"></i>
+                                                </a>
+                                            ) : (
+                                                <span className="p-1 opacity-20 cursor-not-allowed" title="Offline"><i data-lucide="download" size="18"></i></span>
+                                            )}
+                                            <button onClick={() => deleteFile(f.name)} disabled={dbStatus !== 'online'} className={`p-1 ${dbStatus === 'online' ? 'hover:text-red-500' : 'opacity-20 cursor-not-allowed'}`}>
                                                 <i data-lucide="trash-2" size="18"></i>
                                             </button>
                                         </div>
@@ -233,6 +290,18 @@
                             )}
 
                             <div className="win-border p-10 w-full max-w-sm relative" style={{ backgroundColor: currentTheme.panel }}>
+                                
+                                {/* landing gate level database checker chip badge */}
+                                <div className="absolute top-3 right-3 flex items-center gap-1 px-1.5 py-0.5 rounded-sm text-[8px] font-bold uppercase tracking-wider border select-none transition-all"
+                                     style={{ 
+                                         borderColor: dbStatus === 'online' ? 'rgba(34,197,94,0.2)' : dbStatus === 'offline' ? 'rgba(239,68,68,0.2)' : 'rgba(234,179,8,0.2)',
+                                         color: dbStatus === 'online' ? '#4ade80' : dbStatus === 'offline' ? '#f87171' : '#facc15',
+                                         backgroundColor: dbStatus === 'online' ? 'rgba(34,197,94,0.05)' : dbStatus === 'offline' ? 'rgba(239,68,68,0.05)' : 'rgba(234,179,8,0.05)'
+                                     }}>
+                                    <span className={`w-1 h-1 rounded-full ${dbStatus === 'online' ? 'bg-green-400' : dbStatus === 'offline' ? 'bg-red-400' : 'bg-yellow-400 animate-spin'}`}></span>
+                                    DB: {dbStatus}
+                                </div>
+
                                 <div className="flex justify-between items-center mb-10">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 flex items-center justify-center" style={{backgroundColor: currentTheme.accent}}>
@@ -248,7 +317,7 @@
                                 {view === 'home' ? (
                                     <div className="space-y-4">
                                         <button onClick={() => setView('login')} className="win-btn w-full p-4 text-sm font-bold">Log In</button>
-                                        <button onClick={() => setView('setup')} className="win-btn w-full p-4 text-sm opacity-60">Create New Vault</button>
+                                        <button onClick={() => setView('setup')} disabled={dbStatus !== 'online'} className={`win-btn w-full p-4 text-sm opacity-60 ${dbStatus !== 'online' ? 'cursor-not-allowed opacity-30' : ''}`}>Create New Vault</button>
                                     </div>
                                 ) : (
                                     <form onSubmit={(e) => handleEntry(e, view === 'setup' ? 'create' : 'login')} className="space-y-5">
@@ -260,7 +329,7 @@
                                             <label className="text-[10px] uppercase opacity-50 block mb-1" style={{ color: currentTheme.text }}>Password</label>
                                             <input type="password" className="win-input w-full p-3 text-sm" placeholder="••••••••" onChange={e => setForm({...form, pass: e.target.value})} required />
                                         </div>
-                                        <button type="submit" className="win-btn w-full p-4 text-sm text-white border-none font-bold" style={{backgroundColor: currentTheme.accent}}>
+                                        <button type="submit" disabled={dbStatus !== 'online'} className={`win-btn w-full p-4 text-sm text-white border-none font-bold ${dbStatus !== 'online' ? 'opacity-40 cursor-not-allowed' : ''}`} style={{backgroundColor: currentTheme.accent}}>
                                             {loading ? 'Working...' : (view === 'setup' ? 'Create' : 'Log In')}
                                         </button>
                                         <button type="button" onClick={() => setView('home')} className="w-full text-[10px] uppercase opacity-40 hover:opacity-100 transition-opacity text-center block mt-2" style={{ color: currentTheme.text }}>Go Back</button>
@@ -354,7 +423,7 @@
         }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        root.render((<App />));
         setTimeout(() => lucide.createIcons(), 500);
     </script>
 </body>
